@@ -36,6 +36,7 @@ class GCN(pl.LightningModule):
         self.weight_decay = weight_decay
         self.lr_factor = lr_factor
         self.lr_patience = lr_patience  
+        self.n_tasks = n_tasks
 
     def forward(self, x, edge_index, batch):
         # Ensure x is float
@@ -55,7 +56,7 @@ class GCN(pl.LightningModule):
         x = global_mean_pool(x, batch)
         
         x = self.lin(x)
-        return x.squeeze(-1)  # Remove the last dimension to match target shape
+        return x.squeeze(-1) if self.n_tasks == 1 else x
 
     def training_step(self, batch, batch_idx):
         y_hat = self(batch.x, batch.edge_index, batch.batch)
