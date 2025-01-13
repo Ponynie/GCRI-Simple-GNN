@@ -27,26 +27,28 @@ class MTL_MoleculeDataset(Dataset):
 
             # 4 tasks: NP_KV, P_KV, NP_VAN, P_VAN
             # Convert NaN to 0.0 for safe tensor creation
-            np_kv_val = row['NP_KV_value'] if not pd.isna(row['NP_KV_value']) else 0.0
-            p_kv_val  = row['P_KV_value']  if not pd.isna(row['P_KV_value'])  else 0.0
-            np_van_val= row['NP_VAN_value']if not pd.isna(row['NP_VAN_value']) else 0.0
-            p_van_val = row['P_VAN_value'] if not pd.isna(row['P_VAN_value'])  else 0.0
+            np_kv_val = row['NP-KV_value'] if not pd.isna(row['NP-KV_value']) else 0.0
+            p_kv_val  = row['P-KV_value']  if not pd.isna(row['P-KV_value'])  else 0.0
+            np_van_val= row['NP-VAN_value']if not pd.isna(row['NP-VAN_value']) else 0.0
+            p_van_val = row['P-VAN_value'] if not pd.isna(row['P-VAN_value'])  else 0.0
 
             # y is shape [4]
-            data.y = torch.tensor([ 
+            y = torch.tensor([ 
                 np_kv_val,
                 p_kv_val,
                 np_van_val,
                 p_van_val
             ], dtype=torch.float)
-
+            data.y = y.unsqueeze(0)
+            
             # Create a mask vector (1 = present, 0 = missing)
-            data.mask = torch.tensor([
-                row['NP_KV'], 
-                row['P_KV'], 
-                row['NP_VAN'], 
-                row['P_VAN']
+            mask = torch.tensor([
+                row['NP-KV'], 
+                row['P-KV'], 
+                row['NP-VAN'], 
+                row['P-VAN']
             ], dtype=torch.float)
+            data.mask = mask.unsqueeze(0)
 
             torch.save(data, os.path.join(self.processed_dir, f'data_{idx}.pt'))
 

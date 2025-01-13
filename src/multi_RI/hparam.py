@@ -3,8 +3,9 @@
 import os
 
 class Hyperparameters:
-    check_mode = True
+    check_mode = False
     
+    task_weights = [1.0, 1.0, 1.0, 1.0] # [w_NP-KV, w_P-KV, w_NP-VAN, w_P-VAN] # [3.25, 10.5, 1, 10.5]
     max_epoch = 1000
     min_epoch = 100
     batch_size = 64

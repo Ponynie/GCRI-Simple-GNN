@@ -39,7 +39,8 @@ model = GCN(
     weight_decay=Hyperparameters.weight_decay,
     lr_factor=Hyperparameters.lr_factor,
     lr_patience=Hyperparameters.lr_patience,
-    dropout=Hyperparameters.dropout
+    dropout=Hyperparameters.dropout,
+    task_weights=Hyperparameters.task_weights,
 )
 
 # Set up callbacks and logger
@@ -56,7 +57,7 @@ trainer = Trainer(
     logger=wandb_logger,
     callbacks=[lr_monitor, check_point],
     fast_dev_run=check_mode,
-    log_every_n_steps=100
+    log_every_n_steps=150
 )
 
 # Train and validate
