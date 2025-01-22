@@ -3,12 +3,12 @@
 import os
 
 class Hyperparameters:
-    check_mode = True
+    check_mode = False
     
     max_epoch = 1000
     min_epoch = 100
-    batch_size = 32
-    num_workers = int(os.cpu_count() / 2)
+    batch_size = 64
+    num_workers = 8
     test_size = 0.2
     random_state = 42
     patience = 10

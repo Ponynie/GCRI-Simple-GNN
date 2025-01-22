@@ -7,7 +7,6 @@ import pytorch_lightning as pl
 import torch.nn as nn
 from torch_geometric.nn.norm import BatchNorm
 
-# Your weighted masked loss
 def masked_weighted_mse_loss(pred, target, mask, weights):
     mse = (pred - target) ** 2
     weighted_mse = mse * mask * weights
@@ -16,21 +15,25 @@ def masked_weighted_mse_loss(pred, target, mask, weights):
     loss = sum_mse / (sum_mask_weight + 1e-8)
     return loss
 
-def masked_weighted_mae_loss(pred, target, mask, weights):
-    mae = torch.abs(pred - target)
+def masked_weighted_mae_loss(pred, target, mask, weights): # MAE
+    mae = torch.abs(pred - target) 
     weighted_mae = mae * mask * weights
     sum_mae = weighted_mae.sum()
     sum_mask_weight = (mask * weights).sum()
     loss = sum_mae / (sum_mask_weight + 1e-8)
     return loss
-
+ 
 def masked_mae_loss(pred, target, mask):
-    mae = torch.abs(pred - target)
-    masked_mae = mae * mask
-    sum_mae = masked_mae.sum()
-    sum_mask = mask.sum()
-    loss = sum_mae / (sum_mask + 1e-8)
-    return loss
+    mae = torch.abs(pred - target)  # shape: (batch_size, n_tasks)
+    masked_mae = mae * mask  # Only consider valid tasks
+    sum_mae_per_task = masked_mae.sum(dim=0)  # Sum over samples for each task
+    sum_mask_per_task = mask.sum(dim=0)  # Count of valid samples per task
+
+    # Calculate MAE per task (unweighted)
+    per_task_mae = sum_mae_per_task / (sum_mask_per_task + 1e-8)  # shape: (n_tasks,)
+    avg_mae = per_task_mae.mean()  # Average MAE across tasks
+    
+    return avg_mae, per_task_mae
 
 class GCN(pl.LightningModule):
     def __init__(
@@ -102,50 +105,67 @@ class GCN(pl.LightningModule):
         return x
 
     def training_step(self, batch, batch_idx):
-        y_hat = self(batch.x, batch.edge_index, batch.batch)
-        y = batch.y
+        y_hat = self(batch.x, batch.edge_index, batch.batch)  # Predicted values
+        y = batch.y # Ground truth values
         mask = batch.mask  # shape (batch_size, 4)
 
-        # Weighted masked MSE + (optional) masked MAE for logging
+        # MSE loss (weighted, used for training)
         mse_loss = masked_weighted_mse_loss(y_hat, y, mask, self.task_weights)
-        mae = masked_weighted_mae_loss(y_hat, y, mask, self.task_weights)
-        mae_unweight = masked_mae_loss(y_hat, y, mask)
 
+        # Unweighted MAE (for logging)
+        avg_mae_unweighted, per_task_mae_unweighted = masked_mae_loss(y_hat, y, mask)
+
+        # Log overall loss
         self.log('train_loss', mse_loss, on_step=True, on_epoch=True, logger=True, batch_size=y.size(0))
-        self.log('train_mae', mae, on_step=True, on_epoch=True, logger=True, batch_size=y.size(0))
-        self.log('train_mae_unweight', mae_unweight, on_step=True, on_epoch=True, logger=True, batch_size=y.size(0))
+        self.log('train_mae_unweight_avg', avg_mae_unweighted, on_step=True, on_epoch=True, logger=True, batch_size=y.size(0))
         
-        return mse_loss
+        # Log per-task unweighted MAE
+        for i in range(self.n_tasks):
+            self.log(f'train_mae_unweight_task_{i}', per_task_mae_unweighted[i], on_step=True, on_epoch=True, logger=True, batch_size=y.size(0))
+        
+        return mse_loss  # Loss remains MSE for backpropagation
 
     def validation_step(self, batch, batch_idx):
-        y_hat = self(batch.x, batch.edge_index, batch.batch)
-        y = batch.y
-        mask = batch.mask
+        y_hat = self(batch.x, batch.edge_index, batch.batch)  # Predictions
+        y = batch.y  # Ground truth values
+        mask = batch.mask  # Task-specific mask
 
+        # MSE Loss for validation
         mse_loss = masked_weighted_mse_loss(y_hat, y, mask, self.task_weights)
-        mae = masked_weighted_mae_loss(y_hat, y, mask, self.task_weights)
-        mae_unweight = masked_mae_loss(y_hat, y, mask)
 
+        # Unweighted MAE (for logging)
+        avg_mae_unweighted, per_task_mae_unweighted = masked_mae_loss(y_hat, y, mask)
+
+        # Log overall metrics
         self.log('val_loss', mse_loss, prog_bar=True, logger=True, batch_size=y.size(0))
-        self.log('val_mae', mae, prog_bar=True, logger=True, batch_size=y.size(0))
-        self.log('val_mae_unweight', mae_unweight, prog_bar=True, logger=True, batch_size=y.size(0))
+        self.log('val_mae_unweight_avg', avg_mae_unweighted, prog_bar=True, logger=True, batch_size=y.size(0))
         
-        return mse_loss
+        # Log unweighted per-task MAE
+        for i in range(self.n_tasks):
+            self.log(f'val_mae_unweight_task_{i}', per_task_mae_unweighted[i], prog_bar=True, logger=True, batch_size=y.size(0))
+        
+        return mse_loss  # Return MSE loss for validation
 
     def test_step(self, batch, batch_idx):
-        y_hat = self(batch.x, batch.edge_index, batch.batch)
-        y = batch.y
-        mask = batch.mask
+        y_hat = self(batch.x, batch.edge_index, batch.batch)  # Predictions
+        y = batch.y  # Ground truth values
+        mask = batch.mask  # Task-specific mask
 
+        # MSE Loss for testing
         mse_loss = masked_weighted_mse_loss(y_hat, y, mask, self.task_weights)
-        mae = masked_weighted_mae_loss(y_hat, y, mask, self.task_weights)
-        mae_unweight = masked_mae_loss(y_hat, y, mask)
 
+        # Unweighted MAE (for logging)
+        avg_mae_unweighted, per_task_mae_unweighted = masked_mae_loss(y_hat, y, mask)
+
+        # Log overall metrics
         self.log('test_loss', mse_loss, prog_bar=True, logger=True, batch_size=y.size(0))
-        self.log('test_mae', mae, prog_bar=True, logger=True, batch_size=y.size(0))
-        self.log('test_mae_unweight', mae_unweight, prog_bar=True, logger=True, batch_size=y.size(0))
+        self.log('test_mae_unweight_avg', avg_mae_unweighted, prog_bar=True, logger=True, batch_size=y.size(0))
         
-        return mse_loss
+        # Log unweighted per-task MAE
+        for i in range(self.n_tasks):
+            self.log(f'test_mae_unweight_task_{i}', per_task_mae_unweighted[i], prog_bar=True, logger=True, batch_size=y.size(0))
+        
+        return mse_loss  # Return MSE loss for testing
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -156,7 +176,7 @@ class GCN(pl.LightningModule):
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': scheduler,
-                'monitor': 'val_mae',  
+                'monitor': 'val_loss',  
                 'frequency': 1,        
                 'interval': 'epoch'    
             }

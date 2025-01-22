@@ -14,7 +14,7 @@ print('Running in check mode:', check_mode)
 print('Training the GCN model...')
 
 # Define paths
-data_dir = 'data/NP_LRI_RAMP/NP-LRI-RAMP-G-C.csv'  
+data_dir = 'data/P_VAN_RAMP/P-VAN-RAMP-G-C-P.csv'  
 
 # Initialize the data module
 data_module = MoleculeDataModule(csv_path=data_dir,
